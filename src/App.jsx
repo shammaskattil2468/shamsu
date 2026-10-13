@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initialPortfolioData } from './data/portfolioData';
+import { apiService } from './services/api';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import DataJourney from './components/DataJourney';
@@ -24,7 +25,13 @@ export default function App() {
     return localStorage.getItem(THEME_KEY) || 'light';
   });
 
-  // Portfolio Data state with localStorage persistence
+  // Database Connection Status
+  const [dbStatus, setDbStatus] = useState({ 
+    status: 'checking', 
+    uri: 'mongodb://localhost:27017/mubashira_portfolio' 
+  });
+
+  // Portfolio Data state with localStorage persistence and MongoDB hydration
   const [portfolioData, setPortfolioData] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -36,6 +43,33 @@ export default function App() {
     }
     return initialPortfolioData;
   });
+
+  // Initial load: check MongoDB status & load remote portfolio data if available
+  useEffect(() => {
+    let isMounted = true;
+    const syncDb = async () => {
+      try {
+        const status = await apiService.getStatus();
+        if (isMounted) setDbStatus(status);
+
+        if (status.status === 'connected') {
+          const remoteData = await apiService.getPortfolio();
+          if (remoteData && isMounted) {
+            setPortfolioData(remoteData);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Initial sync warning:', err);
+      }
+    };
+    syncDb();
+    return () => { isMounted = false; };
+  }, []);
 
   // Admin Modal state
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -53,20 +87,23 @@ export default function App() {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Save changes handler
-  const handleSaveData = (newData) => {
+  // Save changes handler (both localStorage and MongoDB)
+  const handleSaveData = async (newData) => {
     setPortfolioData(newData);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
     } catch (e) {
       console.error('Error saving portfolio data to localStorage', e);
     }
+    // Persist to MongoDB
+    await apiService.savePortfolio(newData);
   };
 
   // Reset to original defaults
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     setPortfolioData(initialPortfolioData);
     localStorage.removeItem(STORAGE_KEY);
+    await apiService.resetPortfolio();
   };
 
   // Update profile photo directly
@@ -112,6 +149,7 @@ export default function App() {
         toggleTheme={toggleTheme}
         onOpenAdmin={() => setIsAdminOpen(true)}
         isAdminUnlocked={isAdminUnlocked}
+        dbStatus={dbStatus}
       />
 
       <main style={{ flex: 1 }}>
@@ -173,6 +211,7 @@ export default function App() {
         isAdminUnlocked={isAdminUnlocked}
         onUnlockAdmin={handleUnlockAdmin}
         onLockAdmin={handleLockAdmin}
+        dbStatus={dbStatus}
       />
     </div>
   );

@@ -423,3 +423,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     scroll-behavior: auto !important;
   }
 }
+
+@media (min-width: 640px) {
+  .db-status-text {
+    display: inline !important;
+  }
+}

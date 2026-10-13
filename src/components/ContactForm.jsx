@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, AlertCircle, Loader2, Mail, ExternalLink } from 'lucide-react';
+import { Send, CheckCircle2, AlertCircle, Loader2, Mail, ExternalLink, Database } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { apiService } from '../services/api';
 
 export default function ContactForm({ recipientEmail }) {
   const [formData, setFormData] = useState({
@@ -31,13 +32,24 @@ export default function ContactForm({ recipientEmail }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (status === 'sending') return;
 
     if (!validate()) return;
 
     setStatus('sending');
+
+    // Save to MongoDB database
+    let savedToMongo = false;
+    try {
+      const res = await apiService.submitContactMessage(formData);
+      if (res && res.success && !res.offline) {
+        savedToMongo = true;
+      }
+    } catch (err) {
+      console.warn('Could not save to MongoDB directly:', err);
+    }
 
     // Prepare direct mailto action
     const subject = encodeURIComponent(`Portfolio Inquiry from ${formData.name}`);
@@ -46,30 +58,31 @@ export default function ContactForm({ recipientEmail }) {
     );
     const mailtoUrl = `mailto:${recipientEmail}?subject=${subject}&body=${body}`;
 
-    // Simulate reliable dispatch & offer direct mailto client fallback
-    setTimeout(() => {
+    try {
+      // Open user's email client with pre-filled content
+      window.location.href = mailtoUrl;
+
+      setStatus('success');
+      setStatusMessage(
+        savedToMongo
+          ? 'Message saved to MongoDB storage & formatted in your email app. Message sent successfully.'
+          : 'Message formatted and ready in your email app. Message sent successfully.'
+      );
+      setFormData({ name: '', email: '', message: '' });
+
       try {
-        // Open user's email client with pre-filled content
-        window.location.href = mailtoUrl;
-
-        setStatus('success');
-        setStatusMessage('Message formatted and ready in your email app. Message sent successfully.');
-        setFormData({ name: '', email: '', message: '' });
-
-        try {
-          confetti({
-            particleCount: 50,
-            spread: 60,
-            origin: { y: 0.8 }
-          });
-        } catch (err) {
-          // ignore confetti if unsupported
-        }
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.8 }
+        });
       } catch (err) {
-        setStatus('error');
-        setStatusMessage('Something went wrong. Please try again or email directly.');
+        // ignore confetti if unsupported
       }
-    }, 700);
+    } catch (err) {
+      setStatus('error');
+      setStatusMessage('Something went wrong. Please try again or email directly.');
+    }
   };
 
   return (

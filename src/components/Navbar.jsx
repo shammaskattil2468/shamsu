@@ -8,7 +8,8 @@ import {
   SlidersHorizontal,
   Mail,
   User,
-  Sparkles
+  Sparkles,
+  Database
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -16,7 +17,8 @@ export default function Navbar({
   theme, 
   toggleTheme, 
   onOpenAdmin, 
-  isAdminUnlocked 
+  isAdminUnlocked,
+  dbStatus
 }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -149,9 +151,44 @@ export default function Navbar({
           })}
         </nav>
 
-        {/* Controls: Theme Toggle & Admin Edit */}
+        {/* Controls: Storage Status, Theme Toggle & Admin Edit */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           
+          {/* MongoDB Storage Status Pill */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '20px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              backgroundColor: dbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(100, 116, 139, 0.1)',
+              color: dbStatus?.status === 'connected' ? '#10B981' : 'var(--text-muted)',
+              border: `1px solid ${dbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`,
+            }}
+            title={
+              dbStatus?.status === 'connected'
+                ? `MongoDB Connected: ${dbStatus.uri}`
+                : 'MongoDB: Local storage fallback'
+            }
+          >
+            <Database size={13} />
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: dbStatus?.status === 'connected' ? '#10B981' : '#94A3B8',
+                boxShadow: dbStatus?.status === 'connected' ? '0 0 6px #10B981' : 'none',
+              }}
+            />
+            <span style={{ display: 'none' }} className="db-status-text">
+              {dbStatus?.status === 'connected' ? 'MongoDB' : 'Local'}
+            </span>
+          </div>
+
           {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}

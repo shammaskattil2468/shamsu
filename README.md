@@ -66,21 +66,28 @@ A modern personal portfolio website built for **Mubashira PK**, an aspiring Data
 ## 🚀 How to Run Locally
 
 ```bash
-# 1. Navigate to the project directory
-cd d:/mubashira
+# 1. Install dependencies (including Express and Mongoose)
+npm install
 
-# 2. Start the development server
+# 2. Make sure MongoDB is running locally on port 27017:
+# mongodb://localhost:27017/
+
+# 3. Start both backend server and frontend together:
 npm run dev
 
-# 3. Open in your browser
-http://localhost:5173/
+# (Alternatively, run backend or frontend individually)
+npm run server        # Backend Express server on http://localhost:5000
+npm run dev:frontend # Frontend Vite app on http://localhost:5173
 ```
 
-To build for production:
-```bash
-npm run build
-npm run preview
-```
+---
+
+## 🍃 MongoDB Storage Integration
+
+- **Connection URI:** `mongodb://localhost:27017/mubashira_portfolio` (configured in `.env`)
+- **Portfolio Data Persistence:** All edits made via the "Edit Portfolio" modal are automatically saved into MongoDB and synced with local storage cache.
+- **Contact Inquiries Inbox:** Messages submitted through the Contact form are stored into the `messages` collection in MongoDB, and viewable in the admin modal's **"MongoDB Messages"** tab.
+- **Offline Resilience:** If MongoDB is offline, the application automatically falls back to browser storage without interrupting visitor experience.
 
 ---
 
@@ -88,4 +95,5 @@ npm run preview
 
 - **Passcode:** `mubashira` (or `mubashira2024`)
 - Allows you to edit any text, image, skill, or project without touching the code.
-- You can export a JSON backup of your edits anytime from the "Backup & Reset" tab.
+- You can export a JSON backup of your edits anytime from the "Storage & Backup" tab.
+

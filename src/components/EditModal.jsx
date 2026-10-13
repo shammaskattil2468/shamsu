@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   Save, 
@@ -23,8 +23,12 @@ import {
   Award,
   Compass,
   Phone,
-  Settings
+  Settings,
+  Mail,
+  Database,
+  RefreshCw
 } from 'lucide-react';
+import { apiService } from '../services/api';
 
 export default function EditModal({
   isOpen,
@@ -34,22 +38,53 @@ export default function EditModal({
   onResetDefaults,
   isAdminUnlocked,
   onUnlockAdmin,
-  onLockAdmin
+  onLockAdmin,
+  dbStatus
 }) {
   const [activeTab, setActiveTab] = useState('profile');
   const [data, setData] = useState(() => JSON.parse(JSON.stringify(portfolioData)));
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [liveDbStatus, setLiveDbStatus] = useState(dbStatus || { status: 'checking', uri: 'mongodb://localhost:27017/mubashira_portfolio' });
 
   // Sync state if portfolioData updates or modal opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setData(JSON.parse(JSON.stringify(portfolioData)));
       setPinError('');
       setSaveSuccess(false);
+      if (dbStatus) setLiveDbStatus(dbStatus);
     }
-  }, [isOpen, portfolioData]);
+  }, [isOpen, portfolioData, dbStatus]);
+
+  const loadMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const list = await apiService.getMessages();
+      setMessages(Array.isArray(list) ? list : []);
+      const status = await apiService.getStatus();
+      setLiveDbStatus(status);
+    } catch (err) {
+      console.warn(err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'messages') {
+      loadMessages();
+    }
+  }, [isOpen, activeTab]);
+
+  const handleDeleteMessage = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this message from MongoDB?')) return;
+    await apiService.deleteMessage(id);
+    setMessages(prev => prev.filter(m => m._id !== id));
+  };
 
   const fileInputRef = useRef(null);
   const jsonImportRef = useRef(null);
@@ -452,7 +487,8 @@ export default function EditModal({
                 { id: 'certifications', name: 'Certifications', icon: Award },
                 { id: 'learning', name: 'Currently Learning', icon: Compass },
                 { id: 'contact', name: 'Contact Info', icon: Phone },
-                { id: 'settings', name: 'Backup & Reset', icon: Settings },
+                { id: 'messages', name: 'MongoDB Messages', icon: Mail },
+                { id: 'settings', name: 'Storage & Backup', icon: Settings },
               ].map((tab) => {
                 const IconComponent = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1078,12 +1114,208 @@ export default function EditModal({
                 </div>
               )}
 
-              {/* Tab 8: Backup & Reset */}
+              {/* Tab: MongoDB Messages Inbox */}
+              {activeTab === 'messages' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                        Inquiries & Messages (MongoDB)
+                      </h3>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Inquiries submitted through your website's contact form, stored directly in your MongoDB database.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={loadMessages} 
+                      disabled={loadingMessages} 
+                      className="btn btn-secondary btn-sm"
+                      style={{ gap: '0.4rem' }}
+                    >
+                      <RefreshCw size={14} className={loadingMessages ? 'animate-spin' : ''} />
+                      <span>{loadingMessages ? 'Checking...' : 'Refresh Inbox'}</span>
+                    </button>
+                  </div>
+
+                  {/* DB Connection info banner */}
+                  <div
+                    style={{
+                      padding: '1rem 1.25rem',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: liveDbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                      border: `1px solid ${liveDbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <Database size={20} color={liveDbStatus?.status === 'connected' ? '#10B981' : '#EF4444'} />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                          Database Storage: {liveDbStatus?.status === 'connected' ? 'Connected' : 'Offline / Local Cache'}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          {liveDbStatus?.uri || 'mongodb://localhost:27017/mubashira_portfolio'}
+                        </div>
+                      </div>
+                    </div>
+                    <span 
+                      style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: 700, 
+                        color: liveDbStatus?.status === 'connected' ? '#10B981' : '#EF4444',
+                        backgroundColor: liveDbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '20px'
+                      }}
+                    >
+                      {liveDbStatus?.status === 'connected' ? 'LIVE' : 'DISCONNECTED'}
+                    </span>
+                  </div>
+
+                  {/* Messages list */}
+                  {messages.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '3rem 1.5rem',
+                        textAlign: 'center',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px dashed var(--border-color)',
+                      }}
+                    >
+                      <Mail size={36} color="var(--text-muted)" style={{ margin: '0 auto 1rem', opacity: 0.6 }} />
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                        No messages yet
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>
+                        When a visitor or recruiter submits a message on your Contact form, it will automatically appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {messages.map((msg) => (
+                        <div
+                          key={msg._id}
+                          style={{
+                            padding: '1.25rem',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.75rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)' }}>
+                                {msg.name}
+                              </div>
+                              <a href={`mailto:${msg.email}`} style={{ fontSize: '0.82rem', color: 'var(--accent-blue)', textDecoration: 'underline' }}>
+                                {msg.email}
+                              </a>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ''}
+                              </span>
+                              <button
+                                onClick={() => handleDeleteMessage(msg._id)}
+                                className="btn btn-secondary btn-icon"
+                                title="Delete message"
+                                style={{ width: '32px', height: '32px', color: '#EF4444' }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              padding: '0.85rem',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              fontSize: '0.88rem',
+                              color: 'var(--text-secondary)',
+                              whiteSpace: 'pre-wrap',
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {msg.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 8: Storage, Backups & Maintenance */}
               {activeTab === 'settings' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Data Persistence, Backups & Maintenance
+                    MongoDB Storage & Backups
                   </h3>
+
+                  {/* MongoDB Storage Connection Card */}
+                  <div 
+                    style={{
+                      padding: '1.5rem',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <Database size={22} color={liveDbStatus?.status === 'connected' ? '#10B981' : '#64748B'} />
+                        <div>
+                          <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>
+                            MongoDB Database Storage
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            URI: <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{liveDbStatus?.uri || 'mongodb://localhost:27017/mubashira_portfolio'}</code>
+                          </div>
+                        </div>
+                      </div>
+                      <span 
+                        style={{ 
+                          fontSize: '0.75rem', 
+                          fontWeight: 700, 
+                          color: liveDbStatus?.status === 'connected' ? '#10B981' : '#94A3B8',
+                          backgroundColor: liveDbStatus?.status === 'connected' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(100, 116, 139, 0.12)',
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '20px'
+                        }}
+                      >
+                        {liveDbStatus?.status === 'connected' ? 'CONNECTED' : 'DISCONNECTED'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      All edits, projects, and skills are saved directly to your MongoDB database, and synced with local cache for offline reliability.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        onClick={async () => {
+                          const status = await apiService.getStatus();
+                          setLiveDbStatus(status);
+                          alert(status.status === 'connected' ? 'MongoDB connection is ACTIVE on ' + status.uri : 'Backend or MongoDB is currently unreachable. Make sure your MongoDB service and server are running.');
+                        }} 
+                        className="btn btn-secondary btn-sm"
+                        style={{ gap: '0.4rem' }}
+                      >
+                        <RefreshCw size={13} />
+                        <span>Test MongoDB Connection</span>
+                      </button>
+                    </div>
+                  </div>
 
                   <div 
                     style={{
